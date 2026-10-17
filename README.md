@@ -1,6 +1,6 @@
 # FleetTrack
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: devuvo Community](https://img.shields.io/badge/license-devuvo_Community-blue.svg)](LICENSE)
 [![Live demo](https://img.shields.io/badge/demo-live-brightgreen.svg)](https://bryan-cantila.github.io/fleettrack/)
 [![Dependencies](https://img.shields.io/badge/dependencies-none-lightgrey.svg)](index.html)
 
@@ -54,4 +54,4 @@ Designed and built with an AI-assisted workflow: product spec, architecture, and
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Copyright (c) 2026 Bryan A. Cantila / devuvo.
+**Free to use — just credit devuvo.** Personal, educational, and non-commercial use is free, provided you give visible credit (e.g. "Created by devuvo" with a link to https://www.devuvo.com). Using it for business or income-generating purposes? Notify devuvo first at admin@devuvo.com. See [LICENSE](LICENSE) for the full terms.
