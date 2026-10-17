@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FleetTrack — Dispatch Console</title>
+<style>
+:root{
+  --steel:#1f3a5c; --steel-d:#16294a; --ink:#1a2330; --dim:#5b6b7f; --line:#d3dae3;
+  --bg:#e9edf2; --card:#fff; --amber:#d97706;
+  --green:#15803d; --red:#b91c1c; --blue:#1d4ed8; --orange:#c2410c; --purple:#6d28d9;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{font-family:Tahoma,'Segoe UI',Arial,sans-serif; background:var(--bg); color:var(--ink); display:flex; min-height:100vh; font-size:13px;}
+.num,.mono{font-family:'Consolas','SF Mono',monospace; font-variant-numeric:tabular-nums;}
+/* ---------- sidebar ---------- */
+.sidebar{width:200px; background:var(--steel-d); color:#b9c6d8; position:fixed; inset:0 auto 0 0; z-index:10; display:flex; flex-direction:column; border-right:1px solid #0e1c33;}
+.brand{padding:14px 14px; border-bottom:1px solid #2c4a70; background:var(--steel);}
+.brand h1{font-size:15px; color:#fff; letter-spacing:1px;}
+.brand small{font-size:9px; color:#8fa8c8; letter-spacing:2.5px;}
+.nav{padding:8px 6px; flex:1; overflow-y:auto;}
+.nav button{display:flex; align-items:center; gap:9px; width:100%; background:none; border:none; border-left:3px solid transparent; color:#b9c6d8; font-size:12.5px; padding:8px 10px; cursor:pointer; font-family:inherit;}
+.nav button:hover{background:#223c5e; color:#fff;}
+.nav button.active{background:#2c4a70; color:#fff; border-left-color:var(--amber); font-weight:bold;}
+.side-foot{padding:10px 14px; border-top:1px solid #2c4a70; font-size:10.5px; color:#8fa8c8;}
+/* ---------- main ---------- */
+.main{margin-left:200px; flex:1; min-width:0;}
+.topbar{background:var(--steel); color:#fff; padding:9px 18px; display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; z-index:5; border-bottom:2px solid var(--amber);}
+.topbar h2{font-size:15px; letter-spacing:.8px;}
+.topbar .meta{font-size:11.5px; color:#c8d6e8;}
+.view{display:none; padding:14px 16px;}
+.view.active{display:block;}
+/* ---------- stat strip ---------- */
+.stats{display:grid; grid-template-columns:repeat(6,1fr); gap:8px; margin-bottom:12px;}
+@media(max-width:1100px){.stats{grid-template-columns:repeat(3,1fr);}}
+.stat{background:var(--card); border:1px solid var(--line); border-left:3px solid var(--steel); border-radius:4px; padding:8px 12px;}
+.stat .n{font-size:20px; font-weight:bold; font-family:'Consolas',monospace;}
+.stat .l{font-size:9.5px; color:var(--dim); letter-spacing:1px; margin-top:2px;}
+.stat.warn{border-left-color:var(--orange);} .stat.bad{border-left-color:var(--red);} .stat.ok{border-left-color:var(--green);}
+/* ---------- fleet board ---------- */
+.board{background:var(--card); border:1px solid var(--line); border-radius:4px; padding:12px; margin-bottom:12px;}
+.board h3,.card h3{font-size:12px; letter-spacing:1px; color:var(--steel); margin-bottom:10px; text-transform:uppercase; display:flex; justify-content:space-between; align-items:center;}
+.tiles{display:grid; grid-template-columns:repeat(8,1fr); gap:6px;}
+@media(max-width:1100px){.tiles{grid-template-columns:repeat(4,1fr);}}
+.tile{border:1px solid var(--line); border-radius:3px; padding:5px 7px; background:#fbfcfe; cursor:default; border-top:3px solid #94a3b8;}
+.tile:hover{background:#f1f5f9;}
+.tile .p{font-family:'Consolas',monospace; font-weight:bold; font-size:11.5px;}
+.tile .m{font-size:9.5px; color:var(--dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.tile.s-en_route{border-top-color:var(--blue);} .tile.s-active{border-top-color:var(--green);}
+.tile.s-maintenance{border-top-color:var(--orange);} .tile.s-idle{border-top-color:#94a3b8;}
+.legend{display:flex; gap:14px; font-size:11px; color:var(--dim);}
+.legend i{display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px;}
+/* ---------- cards / tables ---------- */
+.card{background:var(--card); border:1px solid var(--line); border-radius:4px; padding:12px; margin-bottom:12px;}
+.grid2{display:grid; grid-template-columns:3fr 2fr; gap:12px;}
+@media(max-width:1100px){.grid2{grid-template-columns:1fr;}}
+table{width:100%; border-collapse:collapse; font-size:12px;}
+th{background:#eef2f7; text-align:left; color:var(--steel); font-size:10px; letter-spacing:.8px; text-transform:uppercase; padding:6px 8px; border-bottom:1px solid var(--line); white-space:nowrap;}
+td{padding:6px 8px; border-bottom:1px solid #e8edf3; vertical-align:middle;}
+tbody tr:nth-child(even) td{background:#f8fafc;}
+tbody tr:hover td{background:#e8f0fa;}
+.badge{display:inline-block; padding:2px 8px; border-radius:3px; font-size:10px; font-weight:bold; letter-spacing:.5px; text-transform:uppercase; white-space:nowrap;}
+.b-green{background:#dcfce7; color:var(--green);} .b-red{background:#fee2e2; color:var(--red);}
+.b-blue{background:#dbeafe; color:var(--blue);} .b-orange{background:#ffedd5; color:var(--orange);}
+.b-purple{background:#ede9fe; color:var(--purple);} .b-gray{background:#e2e8f0; color:#475569;}
+/* ---------- controls ---------- */
+.btn{background:var(--steel); color:#fff; border:1px solid var(--steel-d); padding:6px 14px; border-radius:3px; font-size:12px; cursor:pointer; font-family:inherit; font-weight:bold;}
+.btn:hover{background:#2a4a75;}
+.btn.amber{background:var(--amber); border-color:#92400e;}
+.btn.amber:hover{background:#b45309;}
+.btn.sm{padding:3px 10px; font-size:11px;}
+.btn.ghost{background:#eef2f7; color:var(--ink); border-color:var(--line);}
+.toolbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;}
+.toolbar h3{font-size:13px; letter-spacing:.8px; color:var(--steel); text-transform:uppercase; margin:0;}
+.filters{display:flex; gap:6px;}
+.filters button{background:#eef2f7; border:1px solid var(--line); border-radius:3px; padding:4px 12px; font-size:11px; cursor:pointer; font-family:inherit; color:var(--dim);}
+.filters button.on{background:var(--steel); color:#fff; border-color:var(--steel);}
+.row-actions{display:flex; gap:6px;}
+.alert{background:#fef2f2; border:1px solid #fecaca; border-left:3px solid var(--red); color:#7f1d1d; padding:8px 12px; border-radius:3px; font-size:12px; margin-bottom:10px;}
+.alert.warn{background:#fffbeb; border-color:#fde68a; border-left-color:var(--amber); color:#78350f;}
+.modal-bg{position:fixed; inset:0; background:rgba(10,18,30,.55); display:none; align-items:center; justify-content:center; z-index:50; padding:20px;}
+.modal-bg.show{display:flex;}
+.modal{background:#fff; border-radius:6px; padding:20px; width:100%; max-width:500px; max-height:90vh; overflow-y:auto; border-top:4px solid var(--steel);}
+.modal h3{margin-bottom:14px; font-size:14px; letter-spacing:.8px; text-transform:uppercase; color:var(--steel);}
+.field{margin-bottom:12px;}
+.field label{display:block; font-size:11px; font-weight:bold; color:var(--dim); margin-bottom:4px; text-transform:uppercase; letter-spacing:.5px;}
+.field input,.field select{width:100%; padding:7px 10px; border:1px solid var(--line); border-radius:3px; font-size:13px; font-family:inherit;}
+.field input:focus,.field select:focus{outline:none; border-color:var(--steel);}
+.frow{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+.empty{color:var(--dim); text-align:center; padding:24px; font-size:12px;}
+.bar-wrap{background:#e8edf3; border-radius:2px; height:8px; overflow:hidden; margin-top:4px;}
+.bar-fill{height:100%; background:var(--steel);}
+canvas.chart{width:100%; height:240px;}
+/* ---------- responsive ---------- */
+@media(max-width:900px){
+  body{flex-direction:column;}
+  .sidebar{position:static; width:100%; border-right:none; border-bottom:2px solid var(--amber);}
+  .brand{padding:10px 14px;}
+  .nav{display:flex; overflow-x:auto; padding:6px;}
+  .nav button{white-space:nowrap; border-left:none; border-bottom:3px solid transparent; padding:8px 12px; font-size:12px;}
+  .nav button.active{border-bottom-color:var(--amber);}
+  .side-foot{display:none;}
+  .main{margin-left:0;}
+  .tiles{grid-template-columns:repeat(4,1fr);}
+  .stats{grid-template-columns:repeat(3,1fr);}
+  .grid2{grid-template-columns:1fr;}
+  .card{overflow-x:auto;}
+  table{min-width:600px;}
+  .toolbar{flex-direction:column; align-items:flex-start; gap:8px;}
+  .filters{flex-wrap:wrap;}
+  .topbar{padding:8px 14px;}
+  .view{padding:10px;}
+}
+@media(max-width:520px){
+  .tiles{grid-template-columns:repeat(2,1fr);}
+  .stats{grid-template-columns:repeat(2,1fr);}
+  .topbar h2{font-size:13px;}
+  .topbar .meta{display:none;}
+}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="brand"><h1>FLEETTRACK<small>DISPATCH CONSOLE</small></h1></div>
+  <nav class="nav" id="nav"></nav>
+  <div class="side-foot">Luzon Haulers Inc.<br>32 units · v2.0 demo</div>
+</aside>
+<div class="main">
+  <div class="topbar"><h2 id="page-title">DASHBOARD</h2><div class="meta" id="today"></div></div>
+  <div id="views"></div>
+</div>
+<div class="modal-bg" id="modal-bg"><div class="modal" id="modal"></div></div>
+<script>
+/* ================= FleetTrack v2 — dispatch console ================= */
+const $=id=>document.getElementById(id);
+const peso=n=>'₱'+Number(n).toLocaleString('en-PH');
+$('today').textContent=new Date().toLocaleDateString('en-PH',{weekday:'short',year:'numeric',month:'short',day:'numeric'}).toUpperCase();
+
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+const R=mulberry32(20261014);
+const pick=a=>a[Math.floor(R()*a.length)];
+const ri=(a,b)=>a+Math.floor(R()*(b-a+1));
+
+function buildSeed(){
+  const MODELS=['Isuzu Forward 6W','Mitsubishi Fuso 10W','Isuzu Giga Wing Van','Hino 500 6W','Mitsubishi Fuso 6W','Isuzu Forward Dropside','Hino 300 4W','Hino 700 10W','Foton EST 6W','JAC Gallop 10W'];
+  const statusPlan=['en_route','en_route','en_route','en_route','en_route','en_route','en_route','en_route','en_route','en_route','en_route','en_route',
+    'active','active','active','active','active','active','active','active','active','active',
+    'maintenance','maintenance','maintenance','maintenance','maintenance','idle','idle','idle','idle','idle'];
+  const trucks=statusPlan.map((s,i)=>{
+    const series=String.fromCharCode(65+Math.floor(i/8)); // A..D
+    return {id:'T'+String(i+1).padStart(2,'0'), plate:'NK'+series+' '+(1001+i*137),
+      model:MODELS[i%MODELS.length], year:2017+((i*3)%8), status:s,
+      mileage:60000+i*7800+ri(0,5000), fuel:ri(15,95)};
+  });
+  const NAMES=['Ramon Dela Cruz','Jose Santos','Pedro Gonzales','Mario Fernandez','Andres Villanueva','Enrico Bautista','Danilo Reyes','Roberto Aquino','Felipe Torres','Ricardo Mendoza','Ernesto Castillo','Domingo Flores','Arturo Ramos','Benjamin Cruz','Emilio Navarro','Gregorio Salazar','Humberto Aguilar','Ignacio del Rosario','Lorenzo Mercado','Nicolas Padilla'];
+  const drivers=NAMES.map((n,i)=>({
+    id:'D'+String(i+1).padStart(2,'0'), name:n, phone:'09'+ri(10,59)+'-555-0'+ri(100,199),
+    license:'N04-'+ri(80,99)+'-'+ri(100000,999999),
+    expiry:'2026-'+String(ri(1,12)).padStart(2,'0')+'-'+String(ri(1,28)).padStart(2,'0'),
+    status: i<12?'on_trip':(i<17?'available':'off_duty')}));
+  // fix some expiries to future for realism
+  drivers.forEach((d,i)=>{ if(i%3===0) d.expiry='2027-'+d.expiry.slice(5); if(i%5===0) d.expiry='2028-'+d.expiry.slice(5); });
+  const CLIENTS=['PureFresh Foods Corp.','BuildRight Supply','AgriVantage Trading','Metro Appliance Dist.','FastMart Retail','Luzon Steel Corp.','Pacific Grains Inc.','Verde Farms Co-op'];
+  const ROUTES=[['Calamba, Laguna','Balintawak, QC'],['Meycauayan, Bulacan','Batangas City'],['Cabanatuan, N. Ecija','Divisoria, Manila'],['Cabuyao, Laguna','Dagupan, Pangasinan'],['Pasig City','Lipa, Batangas'],['Manila Port','Clark, Pampanga'],['Batangas Port','Calamba, Laguna'],['San Pablo, Laguna','Lucena, Quezon'],['Tarlac City','Balintawak, QC'],['Los Baños, Laguna','Commonwealth, QC']];
+  const CARGOS=['Frozen goods','Cement','Rice sacks','Appliances','Groceries','Steel bars','Animal feeds','Fertilizer','Bottled water','Construction aggregates'];
+  const tstat=['en_route','en_route','en_route','en_route','en_route','en_route','en_route','en_route','dispatched','dispatched','dispatched','dispatched','pending','pending','pending','pending','pending','delivered','delivered','delivered','delivered','delivered','delivered','delivered'];
+  const enroute=trucks.filter(t=>t.status==='en_route'), availT=trucks.filter(t=>t.status==='active'), idleT=trucks.filter(t=>t.status==='idle');
+  const ontrip=drivers.filter(d=>d.status==='on_trip'), availD=drivers.filter(d=>d.status==='available');
+  const trips=tstat.map((s,i)=>{
+    const r=pick(ROUTES);
+    let tid='',did='';
+    if(s==='en_route'){ tid=enroute[i%enroute.length].id; did=ontrip[i%ontrip.length].id; }
+    else if(s==='dispatched'){ tid=availT[i%availT.length].id; did=availD[i%availD.length].id; }
+    else if(s==='pending'){ tid=pick(idleT.concat(availT)).id; }
+    else { tid=pick(trucks).id; did=pick(drivers).id; }
+    return {id:'TR-'+(1047+i), client:pick(CLIENTS), origin:r[0], destination:r[1],
+      cargo:pick(CARGOS)+' — '+ri(4,14)+' tons', truckId:tid, driverId:did,
+      date:'2026-10-'+String(ri(10,16)).padStart(2,'0'), rate:ri(9,26)*1000, status:s};
+  });
+  const maintenance=trucks.filter(t=>t.status==='maintenance').map((t,i)=>({
+    id:'M'+(i+1), truckId:t.id, type:pick(['Engine overhaul','Brake system replacement','Transmission repair','Suspension rebuild','Turbo replacement']),
+    date:'2026-10-'+String(ri(14,20)).padStart(2,'0'), cost:ri(25,95)*1000, status:'scheduled'}));
+  trucks.slice(0,8).forEach((t,i)=>maintenance.push({id:'MX'+i, truckId:t.id, type:pick(['Oil change + filters','Tire replacement','Aircon repair','Clutch lining']), date:'2026-10-0'+ri(1,9), cost:ri(8,55)*1000, status:'done'}));
+  const fuel=[];
+  trucks.slice(0,16).forEach((t,i)=>{ for(let k=0;k<2;k++) fuel.push({id:'F'+i+'_'+k, truckId:t.id, date:'2026-10-'+String(ri(11,14)).padStart(2,'0'), liters:ri(80,150), cost:0, odometer:t.mileage-k*400}); });
+  fuel.forEach(f=>f.cost=Math.round(f.liters*68));
+  const invoices=trips.filter(t=>t.status==='delivered').map((t,i)=>({
+    id:'INV-'+(2086+i), tripId:t.id, client:t.client, amount:t.rate,
+    status:i<4?'paid':'unpaid', due:'2026-10-'+String(ri(20,30)).padStart(2,'0')}));
+  trips.filter(t=>t.status==='en_route').slice(0,3).forEach((t,i)=>invoices.push({id:'INVX'+i, tripId:t.id, client:t.client, amount:t.rate, status:'unpaid', due:'2026-10-'+String(ri(25,31)).padStart(2,'0')}));
+  return {v:4,trucks,drivers,trips,maintenance,fuel,invoices};
+}
+let DB=null;
+try{ DB=JSON.parse(localStorage.getItem('fleettrack_db')); }catch(e){}
+if(!DB||DB.v!==4){ DB=buildSeed(); save(); }
+function save(){ try{ localStorage.setItem('fleettrack_db',JSON.stringify(DB)); }catch(e){} }
+
+/* ---------- helpers ---------- */
+const truck=id=>DB.trucks.find(t=>t.id===id)||{};
+const driver=id=>DB.drivers.find(d=>d.id===id)||{};
+const TSTATUS={active:['b-green','AVAIL'],en_route:['b-blue','EN ROUTE'],maintenance:['b-orange','IN SHOP'],idle:['b-gray','IDLE']};
+const TRSTATUS={pending:['b-gray','PENDING'],dispatched:['b-purple','DISPATCHED'],en_route:['b-blue','EN ROUTE'],delivered:['b-green','DELIVERED']};
+const badge=(m,v)=>{const b=m[v]||['b-gray',v];return `<span class="badge ${b[0]}">${b[1]}</span>`;};
+const esc=s=>String(s??'').replace(/</g,'&lt;');
+function openModal(h){ $('modal').innerHTML=h; $('modal-bg').classList.add('show'); }
+function closeModal(){ $('modal-bg').classList.remove('show'); }
+$('modal-bg').addEventListener('click',e=>{ if(e.target.id==='modal-bg') closeModal(); });
+const field=(l,i)=>`<div class="field"><label>${l}</label>${i}</div>`;
+const inp=(id,v='',t='text')=>`<input id="${id}" type="${t}" value="${esc(v)}">`;
+const sel=(id,o,v='')=>`<select id="${id}">${o.map(x=>`<option value="${x[0]}" ${x[0]===v?'selected':''}>${x[1]}</option>`).join('')}</select>`;
+const val=id=>($(id)?$(id).value:'').trim();
+const btnRow=`<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn amber" id="m-save">Save</button></div>`;
+
+/* ---------- nav ---------- */
+const NAV=[['dashboard','▦','Dashboard'],['trucks','▣','Trucks'],['trips','➤','Trips'],['drivers','👤','Drivers'],['maintenance','⚙','Maintenance'],['fuel','⛽','Fuel'],['billing','₱','Billing'],['reports','◫','Reports']];
+let cur='dashboard', truckFilter='all', tripFilter='all';
+$('nav').innerHTML=NAV.map(n=>`<button data-v="${n[0]}" class="${n[0]===cur?'active':''}">${n[1]}&nbsp; ${n[2]}</button>`).join('');
+$('nav').addEventListener('click',e=>{const b=e.target.closest('button'); if(b) show(b.dataset.v);});
+function show(v){ cur=v;
+  document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.v===v));
+  $('page-title').textContent=NAV.find(n=>n[0]===v)[2].toUpperCase();
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  $('view-'+v).classList.add('active'); RENDER[v]();
+}
+$('views').innerHTML=NAV.map(n=>`<section class="view" id="view-${n[0]}"></section>`).join('');
+
+/* ---------- dashboard ---------- */
+function vDashboard(){
+  const el=$('view-dashboard');
+  const c=s=>DB.trucks.filter(t=>t.status===s).length;
+  const util=Math.round((c('en_route')/DB.trucks.length)*100);
+  const rev=DB.invoices.filter(i=>i.status==='paid').reduce((a,i)=>a+i.amount,0);
+  const unp=DB.invoices.filter(i=>i.status==='unpaid');
+  const exp=DB.drivers.filter(d=>{const dd=(new Date(d.expiry)-Date.now())/864e5;return dd<120;});
+  const sched=DB.maintenance.filter(m=>m.status==='scheduled');
+  el.innerHTML=`
+  <div class="stats">
+    <div class="stat"><div class="n num">${DB.trucks.length}</div><div class="l">TOTAL UNITS</div></div>
+    <div class="stat ok"><div class="n num">${c('en_route')}</div><div class="l">ON ROAD</div></div>
+    <div class="stat warn"><div class="n num">${c('maintenance')}</div><div class="l">IN SHOP</div></div>
+    <div class="stat"><div class="n num">${util}%</div><div class="l">UTILIZATION</div></div>
+    <div class="stat ok"><div class="n num">${peso(rev)}</div><div class="l">COLLECTED</div></div>
+    <div class="stat bad"><div class="n num">${peso(unp.reduce((a,i)=>a+i.amount,0))}</div><div class="l">RECEIVABLES (${unp.length})</div></div>
+  </div>
+  ${exp.length?`<div class="alert warn">⚠ <b>${exp.length} LICENSES</b> expiring &lt; 120 days: ${exp.slice(0,4).map(d=>esc(d.name)).join(', ')}${exp.length>4?'…':''}</div>`:''}
+  <div class="board"><h3>Fleet Board — 32 units
+    <span class="legend"><span><i style="background:var(--blue)"></i>En route</span><span><i style="background:var(--green)"></i>Avail</span><span><i style="background:var(--orange)"></i>In shop</span><span><i style="background:#94a3b8"></i>Idle</span></span></h3>
+    <div class="tiles">${DB.trucks.map(t=>`<div class="tile s-${t.status}" title="${esc(t.model)} · ${t.mileage.toLocaleString()} km"><div class="p">${esc(t.plate)}</div><div class="m">${esc(t.model.split(' ').slice(0,2).join(' '))}</div></div>`).join('')}</div>
+  </div>
+  <div class="grid2">
+    <div class="card"><h3>Active Trips <button class="btn sm ghost" onclick="show('trips')">Open trips →</button></h3>
+      <table><tr><th>ID</th><th>Route</th><th>Unit</th><th>Driver</th><th class="num">Rate</th><th>Status</th></tr>
+      ${DB.trips.filter(t=>t.status!=='delivered').slice(0,8).map(t=>`<tr><td class="mono"><b>${t.id}</b></td><td>${esc(t.origin)} → ${esc(t.destination)}</td><td class="mono">${esc(truck(t.truckId).plate||'—')}</td><td>${esc(driver(t.driverId).name||'—')}</td><td class="num" style="text-align:right">${peso(t.rate)}</td><td>${badge(TRSTATUS,t.status)}</td></tr>`).join('')}
+      </table></div>
+    <div><div class="card"><h3>Scheduled Repairs (${sched.length})</h3>
+      ${sched.slice(0,5).map(m=>`<div style="padding:6px 0;border-bottom:1px solid #e8edf3;font-size:12px"><span class="mono"><b>${esc(truck(m.truckId).plate)}</b></span> — ${esc(m.type)}<br><span style="color:var(--dim)">${m.date} · <span class="num">${peso(m.cost)}</span></span></div>`).join('')||'<div class="empty">None</div>'}</div>
+    </div>
+  </div>`;
+}
+
+/* ---------- trucks ---------- */
+function vTrucks(){
+  const el=$('view-trucks');
+  const list=truckFilter==='all'?DB.trucks:DB.trucks.filter(t=>t.status===truckFilter);
+  const chip=(k,l)=>`<button class="${truckFilter===k?'on':''}" onclick="truckFilter='${k}';vTrucks()">${l}</button>`;
+  el.innerHTML=`<div class="toolbar"><h3>Units — ${list.length} of ${DB.trucks.length}</h3>
+    <div style="display:flex;gap:8px;align-items:center"><div class="filters">${chip('all','All')}${chip('en_route','En Route')}${chip('active','Avail')}${chip('maintenance','In Shop')}${chip('idle','Idle')}</div>
+    <button class="btn amber" onclick="mTruck()">+ Add Unit</button></div></div>
+  <div class="card" style="padding:0"><table><tr><th>Plate</th><th>Model</th><th>Yr</th><th class="num">Mileage</th><th>Fuel</th><th>Status</th><th>Driver</th><th></th></tr>
+  ${list.map(t=>{const d=DB.drivers.find(x=>x.status==='on_trip'&&DB.trips.some(tr=>tr.truckId===t.id&&tr.driverId===x.id&&tr.status==='en_route'));
+    return `<tr><td class="mono"><b>${esc(t.plate)}</b></td><td>${esc(t.model)}</td><td class="num">${t.year}</td>
+    <td class="num" style="text-align:right">${t.mileage.toLocaleString()}</td>
+    <td><div class="bar-wrap" style="width:70px"><div class="bar-fill" style="width:${t.fuel}%;${t.fuel<25?'background:var(--red)':''}"></div></div></td>
+    <td>${badge(TSTATUS,t.status)}</td><td style="font-size:11.5px">${d?esc(d.name):'<span style="color:var(--dim)">—</span>'}</td>
+    <td><button class="btn sm ghost" onclick="mTruck('${t.id}')">Edit</button></td></tr>`;}).join('')}
+  </table></div>`;
+}
+function mTruck(id){
+  const t=DB.trucks.find(x=>x.id===id)||{plate:'',model:'',year:2024,status:'idle',mileage:0,fuel:50};
+  openModal(`<h3>${id?'Edit':'Add'} Unit</h3>
+    ${field('Plate No.',inp('f-plate',t.plate))}
+    <div class="frow">${field('Model',inp('f-model',t.model))}${field('Year',inp('f-year',t.year,'number'))}</div>
+    <div class="frow">${field('Mileage (km)',inp('f-mile',t.mileage,'number'))}${field('Fuel %',inp('f-fuel',t.fuel,'number'))}</div>
+    ${field('Status',sel('f-status',Object.entries(TSTATUS).map(([k,v])=>[k,v[1]]),t.status))}${btnRow}`);
+  $('m-save').onclick=()=>{
+    const d={plate:val('f-plate'),model:val('f-model'),year:+val('f-year')||2024,mileage:+val('f-mile')||0,fuel:+val('f-fuel')||0,status:val('f-status')};
+    if(!d.plate||!d.model){alert('Plate and model required.');return;}
+    if(id) Object.assign(DB.trucks.find(x=>x.id===id),d); else {d.id='T'+Date.now(); DB.trucks.push(d);}
+    save(); closeModal(); vTrucks();
+  };
+}
+
+/* ---------- trips ---------- */
+function vTrips(){
+  const el=$('view-trips');
+  const order={pending:0,dispatched:1,en_route:2,delivered:3};
+  const all=[...DB.trips].sort((a,b)=>order[a.status]-order[b.status]);
+  const list=tripFilter==='all'?all:all.filter(t=>t.status===tripFilter);
+  const chip=(k,l)=>`<button class="${tripFilter===k?'on':''}" onclick="tripFilter='${k}';vTrips()">${l}</button>`;
+  el.innerHTML=`<div class="toolbar"><h3>Trips — ${list.length} of ${DB.trips.length}</h3>
+    <div style="display:flex;gap:8px;align-items:center"><div class="filters">${chip('all','All')}${chip('pending','Pending')}${chip('dispatched','Dispatched')}${chip('en_route','En Route')}${chip('delivered','Delivered')}</div>
+    <button class="btn amber" onclick="mTrip()">+ New Trip</button></div></div>
+  <div class="card" style="padding:0"><table><tr><th>ID</th><th>Date</th><th>Client / Cargo</th><th>Route</th><th>Unit / Driver</th><th class="num">Rate</th><th>Status</th><th></th></tr>
+  ${list.map(t=>{const nx={pending:['Dispatch','dispatched'],dispatched:['Depart','en_route'],en_route:['Deliver','delivered']}[t.status];
+    return `<tr><td class="mono"><b>${t.id}</b></td><td class="mono">${t.date.slice(5)}</td>
+    <td>${esc(t.client)}<br><span style="color:var(--dim);font-size:11px">${esc(t.cargo)}</span></td>
+    <td style="font-size:11.5px">${esc(t.origin)}<br>→ ${esc(t.destination)}</td>
+    <td class="mono" style="font-size:11.5px">${esc(truck(t.truckId).plate||'—')}<br><span style="font-family:Tahoma">${esc(driver(t.driverId).name||'—')}</span></td>
+    <td class="num" style="text-align:right"><b>${peso(t.rate)}</b></td><td>${badge(TRSTATUS,t.status)}</td>
+    <td><div class="row-actions">${nx?`<button class="btn sm" onclick="tripStep('${t.id}','${nx[1]}')">${nx[0]}</button>`:''}<button class="btn sm ghost" onclick="mTrip('${t.id}')">Edit</button></div></td></tr>`;}).join('')}
+  </table></div>`;
+}
+function tripStep(id,next){
+  const t=DB.trips.find(x=>x.id===id); t.status=next;
+  const tr=truck(t.truckId);
+  if(tr.id) tr.status=next==='delivered'?'active':'en_route';
+  save(); vTrips();
+}
+function mTrip(id){
+  const t=DB.trips.find(x=>x.id===id)||{client:'',origin:'',destination:'',cargo:'',truckId:'',driverId:'',date:'2026-10-14',rate:'',status:'pending'};
+  const aT=[['','— Unit —']].concat(DB.trucks.filter(x=>x.status!=='maintenance').map(x=>[x.id,x.plate+' · '+x.model]));
+  const aD=[['','— Driver —']].concat(DB.drivers.filter(x=>x.status!=='off_duty').map(x=>[x.id,x.name]));
+  openModal(`<h3>${id?'Edit':'New'} Trip</h3>
+    ${field('Client',inp('f-client',t.client))}
+    <div class="frow">${field('Origin',inp('f-origin',t.origin))}${field('Destination',inp('f-dest',t.destination))}</div>
+    ${field('Cargo',inp('f-cargo',t.cargo))}
+    <div class="frow">${field('Unit',sel('f-truck',aT,t.truckId))}${field('Driver',sel('f-driver',aD,t.driverId))}</div>
+    <div class="frow">${field('Date',inp('f-date',t.date,'date'))}${field('Rate (₱)',inp('f-rate',t.rate,'number'))}</div>${btnRow}`);
+  $('m-save').onclick=()=>{
+    const d={client:val('f-client'),origin:val('f-origin'),destination:val('f-dest'),cargo:val('f-cargo'),truckId:val('f-truck'),driverId:val('f-driver'),date:val('f-date'),rate:+val('f-rate')||0};
+    if(!d.client||!d.origin||!d.destination){alert('Client, origin, destination required.');return;}
+    if(id){const o=DB.trips.find(x=>x.id===id); const s=o.status; Object.assign(o,d); o.status=s;}
+    else{d.id='TR-'+(1047+DB.trips.length+Math.floor(Math.random()*90)); d.status='pending'; DB.trips.push(d);}
+    save(); closeModal(); vTrips();
+  };
+}
+
+/* ---------- drivers ---------- */
+function vDrivers(){
+  const el=$('view-drivers');
+  el.innerHTML=`<div class="toolbar"><h3>Drivers — ${DB.drivers.length}</h3><button class="btn amber" onclick="mDriver()">+ Add Driver</button></div>
+  <div class="card" style="padding:0"><table><tr><th>Name</th><th>Phone</th><th class="mono">License</th><th>Expiry</th><th>Status</th><th></th></tr>
+  ${DB.drivers.map(d=>{const days=(new Date(d.expiry)-Date.now())/864e5;
+    const exp=days<0?'<span class="badge b-red">EXPIRED</span>':days<120?`<span class="badge b-orange">${d.expiry}</span>`:`<span class="mono">${d.expiry}</span>`;
+    const st={on_trip:['b-blue','ON TRIP'],available:['b-green','AVAIL'],off_duty:['b-gray','OFF']}[d.status];
+    return `<tr><td><b>${esc(d.name)}</b></td><td class="mono">${esc(d.phone)}</td><td class="mono">${esc(d.license)}</td><td>${exp}</td>
+    <td><span class="badge ${st[0]}">${st[1]}</span></td><td><button class="btn sm ghost" onclick="mDriver('${d.id}')">Edit</button></td></tr>`;}).join('')}
+  </table></div>`;
+}
+function mDriver(id){
+  const d=DB.drivers.find(x=>x.id===id)||{name:'',phone:'',license:'',expiry:'',status:'available'};
+  openModal(`<h3>${id?'Edit':'Add'} Driver</h3>
+    ${field('Full Name',inp('f-name',d.name))}
+    <div class="frow">${field('Phone',inp('f-phone',d.phone))}${field('License No.',inp('f-lic',d.license))}</div>
+    <div class="frow">${field('Expiry',inp('f-exp',d.expiry,'date'))}${field('Status',sel('f-dstat',[['available','Available'],['on_trip','On Trip'],['off_duty','Off Duty']],d.status))}</div>${btnRow}`);
+  $('m-save').onclick=()=>{
+    const o={name:val('f-name'),phone:val('f-phone'),license:val('f-lic'),expiry:val('f-exp'),status:val('f-dstat')};
+    if(!o.name){alert('Name required.');return;}
+    if(id) Object.assign(DB.drivers.find(x=>x.id===id),o); else {o.id='D'+Date.now(); DB.drivers.push(o);}
+    save(); closeModal(); vDrivers();
+  };
+}
+/* ---------- maintenance ---------- */
+function vMaint(){
+  const el=$('view-maintenance');
+  el.innerHTML=`<div class="toolbar"><h3>Maintenance — ${DB.maintenance.length} records</h3><button class="btn amber" onclick="mMaint()">+ Schedule</button></div>
+  <div class="card" style="padding:0"><table><tr><th>Unit</th><th>Service</th><th>Date</th><th class="num">Cost</th><th>Status</th><th></th></tr>
+  ${DB.maintenance.map(m=>`<tr><td class="mono"><b>${esc(truck(m.truckId).plate)}</b></td><td>${esc(m.type)}</td><td class="mono">${m.date}</td>
+    <td class="num" style="text-align:right">${peso(m.cost)}</td>
+    <td>${m.status==='scheduled'?'<span class="badge b-orange">SCHED</span>':'<span class="badge b-green">DONE</span>'}</td>
+    <td>${m.status==='scheduled'?`<button class="btn sm" onclick="maintDone('${m.id}')">Done</button>`:''}</td></tr>`).join('')}
+  </table></div>`;
+}
+function maintDone(id){
+  const m=DB.maintenance.find(x=>x.id===id); m.status='done';
+  const t=truck(m.truckId); if(t.id&&t.status==='maintenance') t.status='idle';
+  save(); vMaint();
+}
+function mMaint(){
+  openModal(`<h3>Schedule Service</h3>
+    ${field('Unit',sel('f-mtruck',DB.trucks.map(t=>[t.id,t.plate+' · '+t.model])))}
+    ${field('Service Type',inp('f-mtype'))}
+    <div class="frow">${field('Date',inp('f-mdate','2026-10-14','date'))}${field('Est. Cost (₱)',inp('f-mcost','','number'))}</div>${btnRow}`);
+  $('m-save').onclick=()=>{
+    const tid=val('f-mtruck');
+    DB.maintenance.push({id:'M'+Date.now(),truckId:tid,type:val('f-mtype')||'General service',date:val('f-mdate'),cost:+val('f-mcost')||0,status:'scheduled'});
+    const t=truck(tid); if(t.id) t.status='maintenance';
+    save(); closeModal(); vMaint();
+  };
+}
+/* ---------- fuel ---------- */
+function vFuel(){
+  const el=$('view-fuel');
+  const per={};
+  DB.fuel.forEach(f=>{per[f.truckId]=per[f.truckId]||{l:0,c:0,n:0}; per[f.truckId].l+=+f.liters; per[f.truckId].c+=+f.cost; per[f.truckId].n++;});
+  const rows=Object.entries(per).sort((a,b)=>b[1].l-a[1].l);
+  el.innerHTML=`<div class="toolbar"><h3>Fuel — ${DB.fuel.length} logs</h3><button class="btn amber" onclick="mFuel()">+ Log Fuel</button></div>
+  <div class="grid2"><div class="card"><h3>Consumption by Unit</h3>
+    ${rows.map(([id,p])=>`<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:11.5px"><span class="mono"><b>${esc(truck(id).plate)}</b></span><span class="num">${p.l} L · ${peso(p.c)}</span></div>
+    <div class="bar-wrap"><div class="bar-fill" style="width:${Math.min(100,p.l/4)}%"></div></div></div>`).join('')}</div>
+  <div class="card"><h3>Recent Logs</h3><table><tr><th>Date</th><th>Unit</th><th class="num">Liters</th><th class="num">Cost</th></tr>
+  ${[...DB.fuel].reverse().slice(0,14).map(f=>`<tr><td class="mono">${f.date.slice(5)}</td><td class="mono"><b>${esc(truck(f.truckId).plate)}</b></td><td class="num" style="text-align:right">${f.liters}</td><td class="num" style="text-align:right">${peso(f.cost)}</td></tr>`).join('')}
+  </table></div></div>`;
+}
+function mFuel(){
+  openModal(`<h3>Log Fuel</h3>
+    <div class="frow">${field('Unit',sel('f-ftruck',DB.trucks.map(t=>[t.id,t.plate])))}${field('Date',inp('f-fdate','2026-10-14','date'))}</div>
+    <div class="frow">${field('Liters',inp('f-flit','','number'))}${field('Cost (₱)',inp('f-fcost','','number'))}</div>
+    ${field('Odometer (km)',inp('f-fodo','','number'))}${btnRow}`);
+  $('m-save').onclick=()=>{
+    DB.fuel.push({id:'F'+Date.now(),truckId:val('f-ftruck'),date:val('f-fdate'),liters:+val('f-flit')||0,cost:+val('f-fcost')||0,odometer:+val('f-fodo')||0});
+    save(); closeModal(); vFuel();
+  };
+}
+/* ---------- billing ---------- */
+function vBilling(){
+  const el=$('view-billing');
+  const unp=DB.invoices.filter(i=>i.status==='unpaid');
+  el.innerHTML=`<div class="toolbar"><h3>Billing — ${DB.invoices.length} invoices</h3><button class="btn amber" onclick="mInv()">+ New Invoice</button></div>
+  ${unp.length?`<div class="alert">◉ <b class="num">${peso(unp.reduce((a,i)=>a+i.amount,0))}</b> receivables — ${unp.length} unpaid invoice(s).</div>`:''}
+  <div class="card" style="padding:0"><table><tr><th>Invoice</th><th>Trip</th><th>Client</th><th class="num">Amount</th><th>Due</th><th>Status</th><th></th></tr>
+  ${DB.invoices.map(i=>`<tr><td class="mono"><b>${i.id}</b></td><td class="mono">${i.tripId}</td><td>${esc(i.client)}</td><td class="num" style="text-align:right"><b>${peso(i.amount)}</b></td><td class="mono">${i.due}</td>
+    <td>${i.status==='paid'?'<span class="badge b-green">PAID</span>':'<span class="badge b-red">UNPAID</span>'}</td>
+    <td>${i.status==='unpaid'?`<button class="btn sm" onclick="invPaid('${i.id}')">Paid</button>`:''}</td></tr>`).join('')}
+  </table></div>`;
+}
+function invPaid(id){ DB.invoices.find(i=>i.id===id).status='paid'; save(); vBilling(); }
+function mInv(){
+  const done=DB.invoices.map(i=>i.tripId);
+  const opts=DB.trips.filter(t=>t.status==='delivered'&&!done.includes(t.id)).map(t=>[t.id,t.id+' — '+t.client+' ('+peso(t.rate)+')']);
+  if(!opts.length){alert('No delivered, unbilled trips.');return;}
+  openModal(`<h3>New Invoice</h3>${field('Trip',sel('f-itrip',opts))}${field('Due Date',inp('f-idue','2026-10-28','date'))}${btnRow}`);
+  $('m-save').onclick=()=>{
+    const t=DB.trips.find(x=>x.id===val('f-itrip'));
+    DB.invoices.push({id:'INV-'+(2086+DB.invoices.length),tripId:t.id,client:t.client,amount:t.rate,status:'unpaid',due:val('f-idue')});
+    save(); closeModal(); vBilling();
+  };
+}
+/* ---------- reports ---------- */
+function vReports(){
+  const el=$('view-reports');
+  const rev=DB.trips.filter(t=>t.status==='delivered').reduce((a,t)=>a+t.rate,0);
+  const mc=DB.maintenance.filter(m=>m.status==='done').reduce((a,m)=>a+m.cost,0);
+  const fc=DB.fuel.reduce((a,f)=>a+f.cost,0);
+  el.innerHTML=`<div class="stats">
+    <div class="stat ok"><div class="n num">${peso(rev)}</div><div class="l">REVENUE (DELIVERED)</div></div>
+    <div class="stat warn"><div class="n num">${peso(mc)}</div><div class="l">MAINTENANCE COST</div></div>
+    <div class="stat warn"><div class="n num">${peso(fc)}</div><div class="l">FUEL COST</div></div>
+    <div class="stat ${rev-mc-fc>0?'ok':'bad'}"><div class="n num">${peso(rev-mc-fc)}</div><div class="l">GROSS MARGIN</div></div>
+    <div class="stat"><div class="n num">${DB.trips.filter(t=>t.status==='delivered').length}</div><div class="l">TRIPS DELIVERED</div></div>
+    <div class="stat"><div class="n num">${(fc/Math.max(1,DB.fuel.reduce((a,f)=>a+ +f.liters,0))).toFixed(2)}</div><div class="l">AVG ₱/LITER</div></div>
+  </div>
+  <div class="card"><h3>Revenue by Unit — Top 10</h3><canvas class="chart" id="ch-rev"></canvas></div>
+  <div class="card"><h3>Trip Status</h3><canvas class="chart" id="ch-st" style="height:190px"></canvas></div>`;
+  drawCharts();
+}
+function drawCharts(){
+  const rev={};
+  DB.trips.filter(t=>t.status==='delivered').forEach(t=>{rev[t.truckId]=(rev[t.truckId]||0)+t.rate;});
+  const top=Object.entries(rev).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const c=$('ch-rev'); if(!c) return;
+  const dpr=window.devicePixelRatio||1, ctx=c.getContext('2d');
+  c.width=c.offsetWidth*dpr; c.height=240*dpr; ctx.scale(dpr,dpr);
+  const W=c.offsetWidth,H=240,pad=44,max=Math.max(...top.map(x=>x[1]),1),bw=(W-pad*2)/Math.max(1,top.length);
+  ctx.font='11px Consolas,monospace';
+  top.forEach(([k,v],i)=>{
+    const h=(H-pad*2)*(v/max), x=pad+i*bw+6, y=H-pad-h;
+    ctx.fillStyle='#1f3a5c'; ctx.fillRect(x,y,bw-12,h);
+    ctx.fillStyle='#1a2330'; ctx.textAlign='center'; ctx.fillText((v/1000)+'k',x+(bw-12)/2,y-6);
+    ctx.fillStyle='#5b6b7f'; ctx.fillText(truck(k).plate||k,x+(bw-12)/2,H-pad+16);
+  });
+  const c2=$('ch-st'), x2=c2.getContext('2d');
+  c2.width=c2.offsetWidth*dpr; c2.height=190*dpr; x2.scale(dpr,dpr);
+  const counts={}; DB.trips.forEach(t=>counts[t.status]=(counts[t.status]||0)+1);
+  const cols={pending:'#94a3b8',dispatched:'#8b5cf6',en_route:'#3b82f6',delivered:'#22c55e'};
+  let ang=-Math.PI/2; const tot=DB.trips.length||1, cx=c2.offsetWidth/2-60, cy=95, r=65;
+  Object.entries(counts).forEach(([s,n])=>{const a2=ang+(n/tot)*Math.PI*2;
+    x2.beginPath(); x2.arc(cx,cy,r,ang,a2); x2.arc(cx,cy,r*0.55,a2,ang,true); x2.closePath(); x2.fillStyle=cols[s]; x2.fill(); ang=a2;});
+  let ly=45;
+  x2.font='12px Tahoma,sans-serif';
+  Object.entries(counts).forEach(([s,n])=>{x2.fillStyle=cols[s]; x2.fillRect(cx+85,ly-10,12,12);
+    x2.fillStyle='#1a2330'; x2.textAlign='left'; x2.fillText(TRSTATUS[s][1]+' — '+n,cx+102,ly); ly+=26;});
+}
+const RENDER={dashboard:vDashboard,trucks:vTrucks,trips:vTrips,drivers:vDrivers,maintenance:vMaint,fuel:vFuel,billing:vBilling,reports:vReports};
+const _pv=new URLSearchParams(location.search).get('view');
+show(_pv&&RENDER[_pv]?_pv:'dashboard');
+</script>
+</body>
+</html>
